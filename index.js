@@ -94,8 +94,7 @@ var getShow = function(options, callback) {
         quality = ['hdtv', '720p', '1080p'],
         deferred = Q.defer(),
         minSeeds = 100,
-        limit = 5,
-        verified = 0;
+        limit = 5;
 
     options.quality = options.quality.toLowerCase();
 
@@ -104,8 +103,6 @@ var getShow = function(options, callback) {
     if(options.minSeeds) minSeeds = options.minSeeds;
 
     if(options.limit) limit = options.limit;
-
-    if(options.verified) verified = 1;
 
     if (quality.indexOf(options.quality) < 0) {
         //return callback(new Error('Quality not valid'));
@@ -126,7 +123,7 @@ var getShow = function(options, callback) {
     }
 
 
-    var searchString = name + ' s' + seasonString + 'e' + episodeString + ' ' + options.quality + ' ' + filters + ' seeds:'+ minSeeds+' verified:'+verified+'/?rss=1';
+    var searchString = name + ' s' + seasonString + 'e' + episodeString + ' ' + options.quality + ' ' + filters + ' seeds:'+ minSeeds+' verified:1/?rss=1';
 
     originalRequest = {
         showName: options.name,
