@@ -2,109 +2,13 @@ var request = require('request'),
     xml2js = require('xml2js'),
     Q = require('q'),
     parser = new xml2js.Parser(),
-    opensubtitles = require('opensubtitles-client'),
     originalRequest;
 
-
-var getSubtitles = function(showData, callback) {
-    var deferred = Q.defer();
-
-    opensubtitles.api.login()
-        .done(function(token) {
-            opensubtitles.api.search(token, 'all', showData.torrentData.fileName)
-                .done(
-                    function(results) {
-                        var langList = [];
-                        var subtitles = [];
-
-                        var addUTF = function(url) {
-                            var a = url;
-                            var position = a.indexOf('download/');
-                            var b = 'subencoding-utf8/';
-                            var output = [a.slice(0, position), b, a.slice(position)].join('');
-                            return output;
-                        }
-
-                        for (var i = 0; i < results.length; i++) {
-                            if (langList.indexOf(results[i].SubLanguageID) === -1) {
-                                langList.push(results[i].SubLanguageID);
-                            };
-                        };
-
-                        for (var i = 0; i < langList.length; i++) { //filter elements of same language together for logic
-                            var langSubs = results.filter(function(element) {
-                                return element.SubLanguageID === langList[i];
-                            })
-
-                            var bestMatch = langSubs.filter(function(element) { //filter subs where release matches release name
-                                if (element.MovieReleaseName.toLowerCase().replace(/\-/g, '.').indexOf(showData.torrentData.fileName.toLowerCase().replace(/\.(ettv|eztv|publichd)/g, '')) !== -1) {
-                                    return element;
-                                }
-                            });
-
-                            if (bestMatch.length === 0) {
-                                continue;
-                            }
-
-                            bestMatch.sort(function(a, b) {
-                                return b.SubDownloadsCnt - a.SubDownloadsCnt;
-                            });
-
-
-
-                            subtitles.push({ //pushes exact match to subtitles array
-                                subtitleURL: addUTF(bestMatch[0].SubDownloadLink),
-                                zipURL: addUTF(bestMatch[0].ZipDownloadLink),
-                                srtURL: addUTF(bestMatch[0].SubDownloadLink).slice(0, addUTF(bestMatch[0].SubDownloadLink).length - 2) + 'srt',
-                                languageID: bestMatch[0].SubLanguageID,
-                                ISO639: bestMatch[0].ISO639,
-                                language: bestMatch[0].LanguageName,
-                                exactMatch: true,
-                                releaseName: bestMatch[0].MovieReleaseName.toLowerCase().replace(/\-/g, '.')
-                            });
-
-                        };
-
-                        for (var i = 0; i < subtitles.length; i++) { //remove langs that we already have best match from list
-                            langList.splice(langList.indexOf(subtitles[i].languageID), 1);
-                        };
-
-                        for (var i = 0; i < langList.length; i++) { //filter elements of same language together for logic
-                            var unsureLangSubs = results.filter(function(element) {
-                                return element.SubLanguageID === langList[i];
-                            })
-
-                            unsureLangSubs.sort(function(a, b) {
-                                return b.SubDownloadsCnt - a.SubDownloadsCnt;
-                            })
-
-                            subtitles.push({ //pushes exact match to subtitles array
-                                subtitleURL: addUTF(unsureLangSubs[0].SubDownloadLink),
-                                zipURL: addUTF(unsureLangSubs[0].ZipDownloadLink),
-                                srtURL: addUTF(unsureLangSubs[0].SubDownloadLink).slice(0, addUTF(unsureLangSubs[0].SubDownloadLink).length - 2) + 'srt',
-                                languageID: unsureLangSubs[0].SubLanguageID,
-                                ISO639: unsureLangSubs[0].ISO639,
-                                language: unsureLangSubs[0].LanguageName,
-                                exactMatch: false,
-                                releaseName: unsureLangSubs[0].MovieReleaseName.toLowerCase().replace(/\-/g, '.')
-                            });
-
-                        };
-
-
-
-                        showData.subtitles = subtitles; //add array to general show object
-                        deferred.resolve(showData);
-                    }
-            );
-        });
-
-    return deferred.promise.nodeify(callback);
-}
+var KICKASS_URL = 'http://kickass.so/';
 
 //searching for the torrent
 var getSearchRSS = function(searchString, callback) {
-    var requestURL = 'http://kickass.to/usearch/' + searchString,
+    var requestURL = KICKASS_URL + 'usearch/' + searchString,
         deferred = Q.defer();
 
     request(requestURL, function(error, response, body) {
@@ -136,29 +40,37 @@ var parseRSS = function(rawBody, callback) {
 //get the parsed rss, sort by seeds and get the best.
 var findBestTorrent = function(data, callback) {
     var torrentList = data.rss.channel[0].item,
-        bestTorrent,
-        deferred = Q.defer();
+        torrent,
+        deferred = Q.defer(),
+        torrents = [];
 
     torrentList.sort(function(a, b) {
         return b['torrent:seeds'] - a['torrent:seeds'];
     });
 
-    bestTorrent = {
-        showName: originalRequest.showName,
-        season: originalRequest.season,
-        episode: originalRequest.episode,
-        quality: originalRequest.quality,
-        torrentData: {
-            title: torrentList[0].title[0],
-            seeds: torrentList[0]['torrent:seeds'][0],
-            fileName: torrentList[0]['torrent:fileName'][0].slice(0, torrentList[0]['torrent:fileName'][0].length - 8),
-            torrent: torrentList[0].enclosure[0].$.url,
-            magnetURI: torrentList[0]['torrent:magnetURI'][0],
-            fileSize: torrentList[0].enclosure[0].$.length
+    for(var i = 0; i < originalRequest.limit; i++) {
+
+        if(!torrentList[i]) break;
+
+        torrent = {
+            showName: originalRequest.showName,
+            season: originalRequest.season,
+            episode: originalRequest.episode,
+            quality: originalRequest.quality,
+            torrentData: {
+                title: torrentList[i].title[0],
+                seeds: torrentList[i]['torrent:seeds'][0],
+                fileName: torrentList[i]['torrent:fileName'][0].slice(0, torrentList[i]['torrent:fileName'][0].length - 8),
+                torrent: torrentList[i].enclosure[0].$.url,
+                magnetURI: torrentList[i]['torrent:magnetURI'][0],
+                fileSize: torrentList[i].enclosure[0].$.length
+            }
         }
+
+        torrents.push(torrent)
     }
 
-    deferred.resolve(bestTorrent);
+    deferred.resolve(torrents);
     return deferred.promise.nodeify(callback);
 
 }
@@ -175,22 +87,25 @@ var cleanShowName = function(showName) {
 };
 
 var getShow = function(options, callback) {
-    /*
-    options = {
-    name: show's name
-    season:
-    episode:
-    quality:
-    }
-    */
     var seasonString = ('0' + options.season).slice(-2),
         episodeString = ('0' + options.episode).slice(-2),
         name = cleanShowName(options.name),
         filters,
         quality = ['hdtv', '720p', '1080p'],
-        deferred = Q.defer();
+        deferred = Q.defer(),
+        minSeeds = 100,
+        limit = 5,
+        verified = 0;
 
     options.quality = options.quality.toLowerCase();
+
+    if(options.url) KICKASS_URL = options.url;
+
+    if(options.minSeeds) minSeeds = options.minSeeds;
+
+    if(options.limit) limit = options.limit;
+
+    if(options.verified) verified = 1;
 
     if (quality.indexOf(options.quality) < 0) {
         //return callback(new Error('Quality not valid'));
@@ -211,13 +126,16 @@ var getShow = function(options, callback) {
     }
 
 
-    var searchString = name + ' s' + seasonString + 'e' + episodeString + ' ' + options.quality + ' ' + filters + ' seeds:100 verified:1/?rss=1';
+    var searchString = name + ' s' + seasonString + 'e' + episodeString + ' ' + options.quality + ' ' + filters + ' seeds:'+ minSeeds+' verified:'+verified+'/?rss=1';
 
     originalRequest = {
         showName: options.name,
         season: options.season,
         episode: options.episode,
-        quality: options.quality
+        quality: options.quality,
+        limit: options.limit,
+        minSeeds: options.minSeeds,
+        verified: options.verified
     }
 
     deferred.resolve(searchString);
@@ -233,7 +151,6 @@ module.exports = function(options, callback) {
     promise.then(getSearchRSS)
         .then(parseRSS)
         .then(findBestTorrent)
-        .then(getSubtitles)
         .then(function(finalData) {
             deferred.resolve(finalData);
         })

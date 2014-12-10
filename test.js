@@ -19,7 +19,8 @@ showsearcher({
     name: 'the mentalist',
     season: 6,
     episode: 17,
-    quality: 'hdtv'
+    quality: 'hdtv',
+    limit: 5
 })    .then(function(finalData) {
         console.log(finalData);
     })
