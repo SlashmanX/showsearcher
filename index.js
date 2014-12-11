@@ -4,7 +4,7 @@ var request = require('request'),
     parser = new xml2js.Parser(),
     originalRequest;
 
-var KICKASS_URL = 'http://kickass.so/';
+var KICKASS_URL = 'http://kickassunblock.net/';
 
 //searching for the torrent
 var getSearchRSS = function(searchString, callback) {
@@ -96,17 +96,16 @@ var getShow = function(options, callback) {
         minSeeds = 100,
         limit = 5;
 
-    options.quality = options.quality.toLowerCase();
+    if(options.quality) options.quality = options.quality.toLowerCase();
 
     if(options.url) KICKASS_URL = options.url;
 
-    if(options.minSeeds) minSeeds = options.minSeeds;
+    if(options.seeds) minSeeds = options.seeds;
 
     if(options.limit) limit = options.limit;
 
     if (quality.indexOf(options.quality) < 0) {
-        //return callback(new Error('Quality not valid'));
-        deferred.reject(new Error('Invalid quality value'));
+        options.quality = ''
     }
 
     switch (options.quality) {
@@ -119,6 +118,8 @@ var getShow = function(options, callback) {
         case '1080p':
             filters = '-720p';
             break;
+        default:
+            filters = '';
 
     }
 
@@ -130,8 +131,8 @@ var getShow = function(options, callback) {
         season: options.season,
         episode: options.episode,
         quality: options.quality,
-        limit: options.limit,
-        minSeeds: options.minSeeds,
+        limit: limit,
+        seeds: options.seeds,
         verified: options.verified
     }
 
